@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>My GPT Chat</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      display: flex;
+      height: 100vh;
+    }
+
+    /* Sidebar */
+    #sidebar {
+      width: 220px;
+      background-color: #f0f0f0;
+      padding: 10px;
+      border-right: 1px solid #ccc;
+      box-sizing: border-box;
+      overflow-y: auto;
+    }
+
+    #sidebar h2 {
+      font-size: 18px;
+      margin-top: 0;
+    }
+
+    #newChatBtn {
+      margin-bottom: 10px;
+      width: 100%;
+      padding: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .session-item {
+      padding: 8px;
+      margin-bottom: 5px;
+      background: #fff;
+      cursor: pointer;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .session-item:hover {
+      background-color: #e0e0e0;
+    }
+
+    /* Main content */
+    #main {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    #chat {
+      border: 1px solid #ccc;
+      padding: 15px;
+      height: 100%;
+      overflow-y: auto;
+      background-color: #f9f9f9;
+      flex-grow: 1;
+      margin-bottom: 10px;
+    }
+
+    .message {
+      margin-bottom: 10px;
+    }
+
+    .user {
+      font-weight: bold;
+      color: #0077cc;
+    }
+
+    .assistant {
+      color: #333;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar: session list -->
+  <div id="sidebar">
+    <h2>Chats</h2>
+    <button id="newChatBtn">+ New Chat</button>
+    <div id="sessionList"></div>
+  </div>
+
+  <!-- Main chat area -->
+  <div id="main">
+    <div id="chat"></div>
+    <input
+      type="text"
+      id="userMessage"
+      placeholder="Type your message and press Enter..."
+      onkeydown="handleKey(event)"
+    />
+    <input type="hidden" id="sessionId" value="" />
+  </div>
+
+  <script>
+    // Handle Enter key
+    function handleKey(event) {
+      if (event.key === "Enter") {
+        sendMessage();
+      }
+    }
+
+    // Display a single message
+    function displayMessage(role, content) {
+      const chatBox = document.getElementById("chat");
+      const className = role === "user" ? "user" : "assistant";
+      const name = role === "user" ? "You" : "Assistant";
+      chatBox.innerHTML += `<div class="message"><span class="${className}">${name}:</span> ${content}</div>`;
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // Clear chat area
+    function clearChat() {
+      document.getElementById("chat").innerHTML = "";
+    }
+
+    // Load messages from a session
+    function loadSession(sessionId) {
+      fetch(`/session/${sessionId}`)
+        .then(res => res.json())
+        .then(messages => {
+          document.getElementById("sessionId").value = sessionId;
+          clearChat();
+          messages.forEach(msg => displayMessage(msg.role, msg.content));
+        });
+    }
+
+    // Load all session IDs into the sidebar
+    function loadSessionList() {
+      fetch("/sessions")
+        .then(res => res.json())
+        .then(sessions => {
+          const list = document.getElementById("sessionList");
+          list.innerHTML = "";
+          sessions.forEach(session => {
+            const item = document.createElement("div");
+            item.className = "session-item";
+            item.textContent = session;
+            item.onclick = () => loadSession(session);
+            list.appendChild(item);
+          });
+
+          // Automatically load the latest session if available
+          if (sessions.length > 0) {
+            loadSession(sessions[0]);
+          } else {
+            createNewSession();
+          }
+        });
+    }
+
+    // Send user message
+    function sendMessage() {
+      const messageInput = document.getElementById("userMessage");
+      const sessionId = document.getElementById("sessionId").value;
+      const message = messageInput.value.trim();
+
+      if (message === "") return;
+
+      displayMessage("user", message);
+
+      fetch("/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          prompt: message,
+          session_id: sessionId
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.response) {
+          displayMessage("assistant", data.response);
+          messageInput.value = "";
+          if (data.session_id) {
+            document.getElementById("sessionId").value = data.session_id;
+            loadSessionList(); // Refresh session list
+          }
+        }
+      });
+    }
+
+    // Create new session
+    function createNewSession() {
+      const newId = new Date().toISOString().replace(/[-:.TZ]/g, "_");
+      document.getElementById("sessionId").value = newId;
+      clearChat();
+    }
+
+    // Event: new chat button
+    document.getElementById("newChatBtn").addEventListener("click", () => {
+      createNewSession();
+      loadSessionList();
+    });
+
+    // On page load
+    window.onload = loadSessionList;
+  </script>
+
+</body>
+</html>

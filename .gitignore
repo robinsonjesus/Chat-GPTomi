@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+.env
+
+# Flask
+instance/
+*.sqlite
+
+# Chat storage
+chats/
+
+# Node/Frontend (if you expand later)
+node_modules/
+dist/
+build/
+
+# OS/System files
+.DS_Store
+*.log
