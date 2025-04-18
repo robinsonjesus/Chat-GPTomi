@@ -12,9 +12,20 @@
       height: 100vh;
     }
 
+    #sidebar button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px;
+    }
+
     /* Sidebar */
     #sidebar {
       width: 220px;
+      min-width: 220px;
+      max-width: 220px;
+      flex-shrink: 0;
       background-color: #f0f0f0;
       padding: 10px;
       border-right: 1px solid #ccc;
@@ -43,10 +54,24 @@
       border: 1px solid #ccc;
       border-radius: 4px;
       font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 5px;
     }
 
     .session-item:hover {
       background-color: #e0e0e0;
+    }
+
+    .session-item span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 120px; /* Adjust based on sidebar width and button space */ 
+    }
+    .session-item button {
+      flex-shrink: 0;
     }
 
     /* Main content */
@@ -95,6 +120,13 @@
   <div id="sidebar">
     <h2>Chats</h2>
     <button id="newChatBtn">+ New Chat</button>
+    <label for="modelSelect" style="font-size: 14px; display: block; margin-top: 10px;">Model:</label>
+    <select id="modelSelect" style="width: 100%; padding: 6px; font-size: 14px;">
+      <option value="gpt-3.5">GPT-3.5</option>
+      <option value="gpt-4">GPT-4</option>
+      <option value="gpt-4.1-nano">gpt-4.1-nano</option>
+      <!-- Add more options if needed -->
+    </select>
     <div id="sessionList"></div>
   </div>
 
@@ -111,83 +143,107 @@
   </div>
 
   <script>
-    // Handle Enter key to send message
     function handleKey(event) {
       if (event.key === "Enter") {
         sendMessage();
       }
     }
 
-    // Display a single message (either user or assistant) in the chat window
     function displayMessage(role, content) {
       const chatBox = document.getElementById("chat");
       const className = role === "user" ? "user" : "assistant";
       const name = role === "user" ? "You" : "Assistant";
       chatBox.innerHTML += `<div class="message"><span class="${className}">${name}:</span> ${content}</div>`;
-      chatBox.scrollTop = chatBox.scrollHeight; // Automatically scroll to the bottom of the chat
+      chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    // Clear the chat window
     function clearChat() {
-      document.getElementById("chat").innerHTML = ""; // Empty the chat content
+      document.getElementById("chat").innerHTML = "";
     }
 
-    // Load all messages for a specific session
     function loadSession(sessionId) {
       fetch(`/session/${sessionId}`)
         .then(res => res.json())
         .then(messages => {
-          document.getElementById("sessionId").value = sessionId; // Store sessionId in hidden input
-          clearChat(); // Clear the chat before loading the messages
-          messages.forEach(msg => displayMessage(msg.role, msg.content)); // Display each message in the session
+          document.getElementById("sessionId").value = sessionId;
+          clearChat();
+          messages.forEach(msg => displayMessage(msg.role, msg.content));
         });
     }
 
-    // Load all session IDs and display them in the sidebar
     function loadSessionList() {
-  fetch("/sessions")
-    .then(res => res.json())
-    .then(sessions => {
-      const list = document.getElementById("sessionList");
-      list.innerHTML = ""; // Clear the session list
+      fetch("/sessions")
+        .then(res => res.json())
+        .then(sessions => {
+          const list = document.getElementById("sessionList");
+          list.innerHTML = "";
 
-      sessions.forEach(session => {
-        const item = document.createElement("div");
-        item.className = "session-item";
-        item.textContent = session;
+          sessions.forEach(session => {
+            const item = document.createElement("div");
+            item.className = "session-item";
 
-        // ✅ Highlight currently selected session
-        if (session === document.getElementById("sessionId").value) {
-          item.style.backgroundColor = "#d0e6ff";
-        }
+            const nameSpan = document.createElement("span");
+            nameSpan.textContent = session;
+            nameSpan.style.flexGrow = "1";
+            nameSpan.style.cursor = "pointer";
+            nameSpan.onclick = () => loadSession(session);
 
-        item.onclick = () => {
-          loadSession(session);
-        };
+            const renameBtn = document.createElement("button");
+            renameBtn.textContent = "📝";
+            renameBtn.style.marginLeft = "5px";
+            renameBtn.onclick = (e) => {
+              e.stopPropagation();
+              const newName = prompt("Enter new name:", session);
+              if (newName && newName !== session) {
+                fetch("/rename-session", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({ old_id: session, new_id: newName })
+                }).then(() => loadSessionList());
+              }
+            };
 
-        list.appendChild(item);
-      });
+            const deleteBtn = document.createElement("button");
+            deleteBtn.textContent = "🗑️";
+            deleteBtn.style.marginLeft = "5px";
+            deleteBtn.onclick = (e) => {
+              e.stopPropagation();
+              if (confirm(`Delete session "${session}"?`)) {
+                fetch(`/session/${session}`, { method: "DELETE" })
+                  .then(() => {
+                    loadSessionList();
+                    clearChat();
+                  });
+              }
+            };
 
-      // ✅ Only auto-load a session if none is currently selected
-      const current = document.getElementById("sessionId").value;
-      if (!current && sessions.length > 0) {
-        loadSession(sessions[0]); // Only auto-load if not already in a session
-      }
-    });
-}
+            item.appendChild(nameSpan);
+            item.appendChild(renameBtn);
+            item.appendChild(deleteBtn);
+            list.appendChild(item);
+          });
 
+          const currentId = document.getElementById("sessionId").value;
+          if (sessions.length > 0 && (!currentId || !sessions.includes(currentId))) {
+            loadSession(sessions[0]);
+          } else if (sessions.length === 0) {
+            createNewSession();
+          }
+        });
+    }
 
-    // Send a message to the backend and display the assistant's response
     function sendMessage() {
       const messageInput = document.getElementById("userMessage");
-      const sessionId = document.getElementById("sessionId").value; // Get the current sessionId
-      const message = messageInput.value.trim(); // Trim leading/trailing spaces
+      const sessionId = document.getElementById("sessionId").value;
+      const message = messageInput.value.trim();
+      const selectedModel = document.getElementById("modelSelect").value;
 
-      if (message === "") return; // Don't send empty messages
+      if (message === "") return;
 
-      displayMessage("user", message); // Display the user's message
+      displayMessage("user", message);
 
-      // Send the message to the backend
       fetch("/chat", {
         method: "POST",
         headers: {
@@ -195,55 +251,53 @@
         },
         body: JSON.stringify({
           prompt: message,
-          session_id: sessionId // Include the sessionId in the request
+          session_id: sessionId,
+          model: selectedModel // Include the selected model
         })
       })
-      .then(res => res.json())
-      .then(data => {
-        if (data.response) {
-          displayMessage("assistant", data.response); // Display the assistant's response
-          messageInput.value = ""; // Clear the input field after sending the message
-          if (data.session_id) {
-            document.getElementById("sessionId").value = data.session_id; // Update the sessionId if changed
-            loadSessionList(); // Refresh the session list with the updated session
+        .then(res => res.json())
+        .then(data => {
+          if (data.response) {
+            displayMessage("assistant", data.response);
+            messageInput.value = "";
+            if (data.session_id) {
+              document.getElementById("sessionId").value = data.session_id;
+              loadSessionList();
+            }
           }
+        });
+    }
+
+    async function createNewSession() {
+      const newId = new Date().toISOString().replace(/[-:.TZ]/g, "_");
+      document.getElementById("sessionId").value = newId;
+      clearChat();
+
+      try {
+        const res = await fetch("/session/new", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: newId })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          console.error("Error creating session:", data);
+        } else {
+          console.log("New session created:", data.session_id);
+          loadSessionList();
         }
-      });
-    }
-
-    // ✅ Send a POST request to backend to create a new empty session
-  async function createNewSession() {
-    const newId = new Date().toISOString().replace(/[-:.TZ]/g, "_"); // Create unique session ID
-    document.getElementById("sessionId").value = newId; // Set session ID in hidden input
-    clearChat(); // Clear the chat window
-
-    // ✅ Tell the backend to create a new session file
-    try {
-      const res = await fetch("/session/new", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: newId })
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        console.error("Error creating session:", data);
-      } else {
-        console.log("New session created:", data.session_id);
-        loadSessionList(); // Refresh list to include new session
+      } catch (err) {
+        console.error("Fetch error creating new session:", err);
       }
-    } catch (err) {
-      console.error("Fetch error creating new session:", err);
     }
-  }
 
-  // ✅ Listen for new chat button WITHOUT refreshing the page
-  document.getElementById("newChatBtn").addEventListener("click", (e) => {
-    e.preventDefault(); // 🛑 Stop default form behavior (page reload)
-    createNewSession();
-  });
+    document.getElementById("newChatBtn").addEventListener("click", (e) => {
+      e.preventDefault();
+      createNewSession();
+    });
 
-  window.onload = loadSessionList; // Initial load of sessions
+    window.onload = loadSessionList;
   </script>
 
 </body>

@@ -1,14 +1,18 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, abort
 from dotenv import load_dotenv
 import os
 import openai
 import json
 from datetime import datetime
 
+from openai import OpenAI
+
+
 # Load environment variables
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
-client = openai.OpenAI(api_key=api_key)
+openai.api_key = api_key  # Correct way to set the OpenAI API key
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app = Flask(__name__)
 
@@ -56,25 +60,20 @@ def chat():
     data = request.get_json()
     prompt = data.get("prompt", "")
     session_id = data.get("session_id", datetime.now().strftime("%Y%m%d_%H%M%S"))
+    model = data.get("model", "gpt-4")
 
     messages = load_session(session_id)
     messages.append({"role": "user", "content": prompt})
 
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model=model,
             messages=messages
         )
 
-        print("OpenAI response:", response)
+        reply = response.choices[0].message.content.strip()
 
-        # ✅ Get the assistant's message properly
-        if hasattr(response, 'choices') and len(response.choices) > 0:
-            reply = response.choices[0].message.content.strip()
-        else:
-            raise ValueError("No valid response from OpenAI.")
-
-        # Save both user and assistant messages
+        # Save messages
         save_to_session(session_id, "user", prompt)
         save_to_session(session_id, "assistant", reply)
 
@@ -99,6 +98,34 @@ def get_session(session_id):
 @app.route("/")
 def home():
     return send_from_directory("static", "index.html")
+
+# Delete a session
+@app.route("/session/<session_id>", methods=["DELETE"])
+def delete_session(session_id):
+    path = os.path.join(CHAT_DIR, f"{session_id}.json")
+    if os.path.exists(path):
+        os.remove(path)
+        return jsonify({"success": True})
+    return abort(404, "Session not found")
+
+# Rename a session
+@app.route("/rename-session", methods=["POST"])
+def rename_session():
+    data = request.get_json()
+    old_id = data.get("old_id")
+    new_id = data.get("new_id")
+
+    old_path = os.path.join(CHAT_DIR, f"{old_id}.json")
+    new_path = os.path.join(CHAT_DIR, f"{new_id}.json")
+
+    if not os.path.exists(old_path):
+        return abort(404, "Original session not found")
+    if os.path.exists(new_path):
+        return abort(400, "Target session name already exists")
+
+    os.rename(old_path, new_path)
+    return jsonify({"success": True})
+
 
 if __name__ == "__main__":
     app.run(debug=True)
