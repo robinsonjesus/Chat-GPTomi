@@ -6,6 +6,8 @@ import json
 from datetime import datetime
 import html
 from openai import OpenAI
+import pymongo
+from pymongo import MongoClient
 
 # Load environment variables
 load_dotenv()
@@ -13,37 +15,44 @@ api_key = os.getenv("OPENAI_API_KEY")
 openai.api_key = api_key
 client = OpenAI(api_key=api_key)
 
+
+# Initialize Flask app
 app = Flask(__name__)
 
-CHAT_DIR = "chats"
-os.makedirs(CHAT_DIR, exist_ok=True)
+# MongoDB setup
+mongo_client = MongoClient("mongodb://localhost:27017/")
+db = mongo_client["chat_db"]  # Database name
+sessions_collection = db["sessions"]  # Collection to store sessions
 
-# --- Utility: Save a message to a session file ---
+# --- Utility: Save a message to a session in MongoDB ---
 def save_to_session(session_id, role, content):
     # Escape user input but NOT assistant markdown
     sanitized_content = html.escape(content) if role == "user" else content
-    path = os.path.join(CHAT_DIR, f"{session_id}.json")
-
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            chat = json.load(f)
+    
+    # Check if the session already exists in MongoDB
+    session = sessions_collection.find_one({"session_id": session_id})
+    if session:
+        messages = session.get("messages", [])
     else:
-        chat = []
+        messages = []
 
-    chat.append({"role": role, "content": sanitized_content})
+    messages.append({"role": role, "content": sanitized_content})
 
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(chat, f, indent=2, ensure_ascii=False)
+    # Update or insert the session into MongoDB
+    sessions_collection.update_one(
+        {"session_id": session_id},
+        {"$set": {"session_id": session_id, "messages": messages}},
+        upsert=True
+    )
 
-# --- Utility: Load messages from session file ---
+# --- Utility: Load messages from session in MongoDB ---
 def load_session(session_id):
-    path = os.path.join(CHAT_DIR, f"{session_id}.json")
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+    session = sessions_collection.find_one({"session_id": session_id})
+    if session:
+        return session["messages"]
     return []
 
-# --- Create a new session file ---
+# --- Create a new session in MongoDB ---
 @app.route("/session/new", methods=["POST"])
 def new_session():
     data = request.get_json()
@@ -51,11 +60,8 @@ def new_session():
     if not session_id:
         return jsonify({"error": "Missing session_id"}), 400
 
-    path = os.path.join(CHAT_DIR, f"{session_id}.json")
-    if not os.path.exists(path):
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump([], f, indent=2, ensure_ascii=False)
-
+    # Insert an empty session in MongoDB
+    sessions_collection.insert_one({"session_id": session_id, "messages": []})
     return jsonify({"status": "created", "session_id": session_id}), 200
 
 # --- Handle chat input/output ---
@@ -77,7 +83,7 @@ def chat():
 
         reply = response.choices[0].message.content.strip()
 
-        # Save messages
+        # Save user and assistant messages in MongoDB
         save_to_session(session_id, "user", prompt)
         save_to_session(session_id, "assistant", reply)
 
@@ -90,20 +96,20 @@ def chat():
 # --- Return a list of available session IDs ---
 @app.route("/sessions", methods=["GET"])
 def get_sessions():
-    files = [f.replace(".json", "") for f in os.listdir(CHAT_DIR) if f.endswith(".json")]
-    return jsonify(sorted(files, reverse=True))
+    session_ids = [session["session_id"] for session in sessions_collection.find()]
+    return jsonify(sorted(session_ids, reverse=True))
 
 # --- Load specific session by ID ---
 @app.route("/session/<session_id>", methods=["GET"])
 def get_session(session_id):
-    return jsonify(load_session(session_id))
+    messages = load_session(session_id)
+    return jsonify(messages)
 
 # --- Delete a session ---
 @app.route("/session/<session_id>", methods=["DELETE"])
 def delete_session(session_id):
-    path = os.path.join(CHAT_DIR, f"{session_id}.json")
-    if os.path.exists(path):
-        os.remove(path)
+    result = sessions_collection.delete_one({"session_id": session_id})
+    if result.deleted_count > 0:
         return jsonify({"success": True})
     return abort(404, "Session not found")
 
@@ -114,22 +120,29 @@ def rename_session():
     old_id = data.get("old_id")
     new_id = data.get("new_id")
 
-    old_path = os.path.join(CHAT_DIR, f"{old_id}.json")
-    new_path = os.path.join(CHAT_DIR, f"{new_id}.json")
-
-    if not os.path.exists(old_path):
+    old_session = sessions_collection.find_one({"session_id": old_id})
+    if not old_session:
         return abort(404, "Original session not found")
-    if os.path.exists(new_path):
+    
+    new_session = sessions_collection.find_one({"session_id": new_id})
+    if new_session:
         return abort(400, "Target session name already exists")
 
-    os.rename(old_path, new_path)
+    sessions_collection.update_one(
+        {"session_id": old_id},
+        {"$set": {"session_id": new_id}}
+    )
+
     return jsonify({"success": True})
 
 # --- Serve static front-end file ---
 @app.route("/")
 def home():
-    return send_from_directory("static", "index.html")
+   return send_from_directory("static", "index.html")
 
+@app.route("/models")
+def get_models():
+    return send_from_directory("static", "models.json")
 
 if __name__ == "__main__":
     app.run(debug=True)
