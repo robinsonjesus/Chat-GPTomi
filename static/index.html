@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <link rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/styles/github.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/highlight.min.js"></script> 
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/styles/github.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/highlight.min.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>My GPT Chat</title>
@@ -72,8 +71,9 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      max-width: 120px; /* Adjust based on sidebar width and button space */ 
+      max-width: 120px;
     }
+
     .session-item button {
       flex-shrink: 0;
     }
@@ -126,10 +126,7 @@
     <button id="newChatBtn">+ New Chat</button>
     <label for="modelSelect" style="font-size: 14px; display: block; margin-top: 10px;">Model:</label>
     <select id="modelSelect" style="width: 100%; padding: 6px; font-size: 14px;">
-      <option value="gpt-3.5">GPT-3.5</option>
-      <option value="gpt-4">GPT-4</option>
-      <option value="gpt-4.1-nano">gpt-4.1-nano</option>
-      <!-- Add more options if needed -->
+      <!-- Options will be populated dynamically -->
     </select>
     <div id="sessionList"></div>
   </div>
@@ -153,7 +150,7 @@
         sendMessage();
       }
     }
-  
+
     function escapeHtml(str) {
       return str.replace(/[&<>"']/g, function (match) {
         const escape = {
@@ -166,34 +163,34 @@
         return escape[match];
       });
     }
-  
+
     function displayMessage(role, content) {
       const chatBox = document.getElementById("chat");
       const className = role === "user" ? "user" : "assistant";
       const name = role === "user" ? "You" : "Assistant";
-  
+
       const messageDiv = document.createElement("div");
       messageDiv.className = "message";
-  
+
       let html;
       if (role === "assistant") {
-        // ✅ Don't escape assistant content before parsing markdown
+        // Don't escape assistant content before parsing markdown
         html = `<span class="${className}">${name}:</span><br>${marked.parse(content)}`;
       } else {
         html = `<span class="${className}">${name}:</span> ${escapeHtml(content)}`;
       }
-  
+
       messageDiv.innerHTML = html;
       chatBox.appendChild(messageDiv);
-  
-      // ✅ Highlight all code blocks
+
+      // Highlight all code blocks
       messageDiv.querySelectorAll("pre code").forEach((block) => {
         hljs.highlightElement(block);
       });
-  
+
       chatBox.scrollTop = chatBox.scrollHeight;
     }
-  
+
     function loadSession(sessionId) {
       fetch(`/session/${sessionId}`)
         .then(res => res.json())
@@ -203,28 +200,28 @@
           messages.forEach(msg => displayMessage(msg.role, msg.content));
         });
     }
-  
+
     function clearChat() {
       document.getElementById("chat").innerHTML = "";
     }
-  
+
     function loadSessionList() {
       fetch("/sessions")
         .then(res => res.json())
         .then(sessions => {
           const list = document.getElementById("sessionList");
           list.textContent = "";
-  
+
           sessions.forEach(session => {
             const item = document.createElement("div");
             item.className = "session-item";
-  
+
             const nameSpan = document.createElement("span");
             nameSpan.textContent = session;
             nameSpan.style.flexGrow = "1";
             nameSpan.style.cursor = "pointer";
             nameSpan.onclick = () => loadSession(session);
-  
+
             const renameBtn = document.createElement("button");
             renameBtn.textContent = "📝";
             renameBtn.style.marginLeft = "5px";
@@ -239,7 +236,7 @@
                 }).then(() => loadSessionList());
               }
             };
-  
+
             const deleteBtn = document.createElement("button");
             deleteBtn.textContent = "🗑️";
             deleteBtn.style.marginLeft = "5px";
@@ -253,13 +250,13 @@
                   });
               }
             };
-  
+
             item.appendChild(nameSpan);
             item.appendChild(renameBtn);
             item.appendChild(deleteBtn);
             list.appendChild(item);
           });
-  
+
           const currentId = document.getElementById("sessionId").value;
           if (sessions.length > 0 && (!currentId || !sessions.includes(currentId))) {
             loadSession(sessions[0]);
@@ -268,17 +265,17 @@
           }
         });
     }
-  
+
     function sendMessage() {
       const messageInput = document.getElementById("userMessage");
       const sessionId = document.getElementById("sessionId").value;
       const message = messageInput.value.trim();
       const selectedModel = document.getElementById("modelSelect").value;
-  
+
       if (message === "") return;
-  
+
       displayMessage("user", message);
-  
+
       fetch("/chat", {
         method: "POST",
         headers: {
@@ -302,19 +299,19 @@
           }
         });
     }
-  
+
     async function createNewSession() {
       const newId = new Date().toISOString().replace(/[-:.TZ]/g, "_");
       document.getElementById("sessionId").value = newId;
       clearChat();
-  
+
       try {
         const res = await fetch("/session/new", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ session_id: newId })
         });
-  
+
         const data = await res.json();
         if (!res.ok) {
           console.error("Error creating session:", data);
@@ -326,14 +323,37 @@
         console.error("Fetch error creating new session:", err);
       }
     }
-  
+
     document.getElementById("newChatBtn").addEventListener("click", (e) => {
       e.preventDefault();
       createNewSession();
     });
-  
+
     window.onload = loadSessionList;
+
+    function loadModelOptions() {
+      fetch("/models")
+        .then(res => res.json())
+        .then(models => {
+          const modelSelect = document.getElementById("modelSelect");
+          modelSelect.innerHTML = "";
+
+          models.forEach(model => {
+            const modelId = typeof model === "string" ? model : model.id;
+            const option = document.createElement("option");
+            option.value = modelId;
+            option.textContent = modelId;
+            modelSelect.appendChild(option);
+          });
+        })
+        .catch(err => console.error("Failed to load models:", err));
+    }
+
+    window.onload = () => {
+      loadModelOptions();   // 🔥 Load models
+      loadSessionList();    // 🔥 Load sessions
+    };
   </script>
-  
+
 </body>
 </html>

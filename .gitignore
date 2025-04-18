@@ -21,3 +21,6 @@ build/
 # OS/System files
 .DS_Store
 *.log
+
+# Models
+stacit/models.json
