@@ -4,15 +4,14 @@ import os
 import openai
 import json
 from datetime import datetime
-
+import html
 from openai import OpenAI
-
 
 # Load environment variables
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
-openai.api_key = api_key  # Correct way to set the OpenAI API key
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai.api_key = api_key
+client = OpenAI(api_key=api_key)
 
 app = Flask(__name__)
 
@@ -21,25 +20,30 @@ os.makedirs(CHAT_DIR, exist_ok=True)
 
 # --- Utility: Save a message to a session file ---
 def save_to_session(session_id, role, content):
+    # Escape user input but NOT assistant markdown
+    sanitized_content = html.escape(content) if role == "user" else content
     path = os.path.join(CHAT_DIR, f"{session_id}.json")
+
     if os.path.exists(path):
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             chat = json.load(f)
     else:
         chat = []
-    chat.append({"role": role, "content": content})
-    with open(path, "w") as f:
-        json.dump(chat, f, indent=2)
+
+    chat.append({"role": role, "content": sanitized_content})
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(chat, f, indent=2, ensure_ascii=False)
 
 # --- Utility: Load messages from session file ---
 def load_session(session_id):
     path = os.path.join(CHAT_DIR, f"{session_id}.json")
     if os.path.exists(path):
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     return []
 
-# ✅ NEW: Create a new session file with an empty chat list
+# --- Create a new session file ---
 @app.route("/session/new", methods=["POST"])
 def new_session():
     data = request.get_json()
@@ -49,8 +53,8 @@ def new_session():
 
     path = os.path.join(CHAT_DIR, f"{session_id}.json")
     if not os.path.exists(path):
-        with open(path, "w") as f:
-            json.dump([], f, indent=2)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump([], f, indent=2, ensure_ascii=False)
 
     return jsonify({"status": "created", "session_id": session_id}), 200
 
@@ -86,7 +90,7 @@ def chat():
 # --- Return a list of available session IDs ---
 @app.route("/sessions", methods=["GET"])
 def get_sessions():
-    files = [f.replace(".json", "") for f in os.listdir(CHAT_DIR)]
+    files = [f.replace(".json", "") for f in os.listdir(CHAT_DIR) if f.endswith(".json")]
     return jsonify(sorted(files, reverse=True))
 
 # --- Load specific session by ID ---
@@ -94,12 +98,7 @@ def get_sessions():
 def get_session(session_id):
     return jsonify(load_session(session_id))
 
-# --- Serve static front-end file ---
-@app.route("/")
-def home():
-    return send_from_directory("static", "index.html")
-
-# Delete a session
+# --- Delete a session ---
 @app.route("/session/<session_id>", methods=["DELETE"])
 def delete_session(session_id):
     path = os.path.join(CHAT_DIR, f"{session_id}.json")
@@ -108,7 +107,7 @@ def delete_session(session_id):
         return jsonify({"success": True})
     return abort(404, "Session not found")
 
-# Rename a session
+# --- Rename a session ---
 @app.route("/rename-session", methods=["POST"])
 def rename_session():
     data = request.get_json()
@@ -125,6 +124,11 @@ def rename_session():
 
     os.rename(old_path, new_path)
     return jsonify({"success": True})
+
+# --- Serve static front-end file ---
+@app.route("/")
+def home():
+    return send_from_directory("static", "index.html")
 
 
 if __name__ == "__main__":
