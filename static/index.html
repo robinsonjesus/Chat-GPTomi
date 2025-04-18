@@ -111,72 +111,83 @@
   </div>
 
   <script>
-    // Handle Enter key
+    // Handle Enter key to send message
     function handleKey(event) {
       if (event.key === "Enter") {
         sendMessage();
       }
     }
 
-    // Display a single message
+    // Display a single message (either user or assistant) in the chat window
     function displayMessage(role, content) {
       const chatBox = document.getElementById("chat");
       const className = role === "user" ? "user" : "assistant";
       const name = role === "user" ? "You" : "Assistant";
       chatBox.innerHTML += `<div class="message"><span class="${className}">${name}:</span> ${content}</div>`;
-      chatBox.scrollTop = chatBox.scrollHeight;
+      chatBox.scrollTop = chatBox.scrollHeight; // Automatically scroll to the bottom of the chat
     }
 
-    // Clear chat area
+    // Clear the chat window
     function clearChat() {
-      document.getElementById("chat").innerHTML = "";
+      document.getElementById("chat").innerHTML = ""; // Empty the chat content
     }
 
-    // Load messages from a session
+    // Load all messages for a specific session
     function loadSession(sessionId) {
       fetch(`/session/${sessionId}`)
         .then(res => res.json())
         .then(messages => {
-          document.getElementById("sessionId").value = sessionId;
-          clearChat();
-          messages.forEach(msg => displayMessage(msg.role, msg.content));
+          document.getElementById("sessionId").value = sessionId; // Store sessionId in hidden input
+          clearChat(); // Clear the chat before loading the messages
+          messages.forEach(msg => displayMessage(msg.role, msg.content)); // Display each message in the session
         });
     }
 
-    // Load all session IDs into the sidebar
+    // Load all session IDs and display them in the sidebar
     function loadSessionList() {
-      fetch("/sessions")
-        .then(res => res.json())
-        .then(sessions => {
-          const list = document.getElementById("sessionList");
-          list.innerHTML = "";
-          sessions.forEach(session => {
-            const item = document.createElement("div");
-            item.className = "session-item";
-            item.textContent = session;
-            item.onclick = () => loadSession(session);
-            list.appendChild(item);
-          });
+  fetch("/sessions")
+    .then(res => res.json())
+    .then(sessions => {
+      const list = document.getElementById("sessionList");
+      list.innerHTML = ""; // Clear the session list
 
-          // Automatically load the latest session if available
-          if (sessions.length > 0) {
-            loadSession(sessions[0]);
-          } else {
-            createNewSession();
-          }
-        });
-    }
+      sessions.forEach(session => {
+        const item = document.createElement("div");
+        item.className = "session-item";
+        item.textContent = session;
 
-    // Send user message
+        // ✅ Highlight currently selected session
+        if (session === document.getElementById("sessionId").value) {
+          item.style.backgroundColor = "#d0e6ff";
+        }
+
+        item.onclick = () => {
+          loadSession(session);
+        };
+
+        list.appendChild(item);
+      });
+
+      // ✅ Only auto-load a session if none is currently selected
+      const current = document.getElementById("sessionId").value;
+      if (!current && sessions.length > 0) {
+        loadSession(sessions[0]); // Only auto-load if not already in a session
+      }
+    });
+}
+
+
+    // Send a message to the backend and display the assistant's response
     function sendMessage() {
       const messageInput = document.getElementById("userMessage");
-      const sessionId = document.getElementById("sessionId").value;
-      const message = messageInput.value.trim();
+      const sessionId = document.getElementById("sessionId").value; // Get the current sessionId
+      const message = messageInput.value.trim(); // Trim leading/trailing spaces
 
-      if (message === "") return;
+      if (message === "") return; // Don't send empty messages
 
-      displayMessage("user", message);
+      displayMessage("user", message); // Display the user's message
 
+      // Send the message to the backend
       fetch("/chat", {
         method: "POST",
         headers: {
@@ -184,37 +195,55 @@
         },
         body: JSON.stringify({
           prompt: message,
-          session_id: sessionId
+          session_id: sessionId // Include the sessionId in the request
         })
       })
       .then(res => res.json())
       .then(data => {
         if (data.response) {
-          displayMessage("assistant", data.response);
-          messageInput.value = "";
+          displayMessage("assistant", data.response); // Display the assistant's response
+          messageInput.value = ""; // Clear the input field after sending the message
           if (data.session_id) {
-            document.getElementById("sessionId").value = data.session_id;
-            loadSessionList(); // Refresh session list
+            document.getElementById("sessionId").value = data.session_id; // Update the sessionId if changed
+            loadSessionList(); // Refresh the session list with the updated session
           }
         }
       });
     }
 
-    // Create new session
-    function createNewSession() {
-      const newId = new Date().toISOString().replace(/[-:.TZ]/g, "_");
-      document.getElementById("sessionId").value = newId;
-      clearChat();
+    // ✅ Send a POST request to backend to create a new empty session
+  async function createNewSession() {
+    const newId = new Date().toISOString().replace(/[-:.TZ]/g, "_"); // Create unique session ID
+    document.getElementById("sessionId").value = newId; // Set session ID in hidden input
+    clearChat(); // Clear the chat window
+
+    // ✅ Tell the backend to create a new session file
+    try {
+      const res = await fetch("/session/new", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: newId })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        console.error("Error creating session:", data);
+      } else {
+        console.log("New session created:", data.session_id);
+        loadSessionList(); // Refresh list to include new session
+      }
+    } catch (err) {
+      console.error("Fetch error creating new session:", err);
     }
+  }
 
-    // Event: new chat button
-    document.getElementById("newChatBtn").addEventListener("click", () => {
-      createNewSession();
-      loadSessionList();
-    });
+  // ✅ Listen for new chat button WITHOUT refreshing the page
+  document.getElementById("newChatBtn").addEventListener("click", (e) => {
+    e.preventDefault(); // 🛑 Stop default form behavior (page reload)
+    createNewSession();
+  });
 
-    // On page load
-    window.onload = loadSessionList;
+  window.onload = loadSessionList; // Initial load of sessions
   </script>
 
 </body>
