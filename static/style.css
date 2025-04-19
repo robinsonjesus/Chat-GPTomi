@@ -1,0 +1,197 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+}
+
+#sidebar {
+    width: 240px;
+    background-color: #f0f0f0;
+    padding: 10px;
+    border-right: 1px solid #ccc;
+    box-sizing: border-box;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+#sidebar h2 {
+    font-size: 18px;
+    margin-top: 0;
+}
+
+#newChatBtn,
+#modelSelect {
+    width: 100%;
+    padding: 8px;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.session-item {
+    padding: 8px;
+    margin-bottom: 5px;
+    background: #fff;
+    cursor: pointer;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    overflow: hidden;
+}
+
+.session-item:hover {
+    background-color: #e0e0e0;
+}
+
+#main {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+#chat {
+    border: 1px solid #ccc;
+    padding: 15px;
+    height: 100%;
+    overflow-y: auto;
+    background-color: #f9f9f9;
+    flex-grow: 1;
+    margin-bottom: 10px;
+}
+
+.message {
+    margin-bottom: 10px;
+}
+
+.user {
+    font-weight: bold;
+    color: #0077cc;
+}
+
+.assistant {
+    color: #333;
+}
+
+#userMessage {
+    width: 100%;
+    padding: 10px;
+    font-size: 16px;
+    box-sizing: border-box;
+    resize: none;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    max-height: 150px;
+}
+
+.chat-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    min-width: 0;
+    width: 100%;
+}
+
+.chat-name {
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    padding-right: 10px; /* Space between name and buttons */
+}
+
+.chat-buttons {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    flex-grow: 0;
+}
+
+.chat-buttons button {
+    padding: 2px 6px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.session-item button {
+    margin-left: 5px;
+    padding: 2px 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  /* Style icon buttons */
+.session-item button {
+    background: none;
+    border: none;
+    padding: 2px 6px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #555;
+    margin-left: 5px;
+    transition: color 0.3s;
+  }
+  
+  .session-item button:hover {
+    color: #000;
+  }
+
+/* Style for each session box */
+.session-item {
+    display: flex;
+    align-items: center;
+    position: relative; /* for absolutely positioning buttons inside */
+    padding: 8px;
+    margin-bottom: 5px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    min-height: 40px; /* optional, for consistent height */
+  }
+  
+  /* The session name (wrap if long) */
+  .session-name {
+    flex: 1;
+    word-wrap: break-word; /* allow wrap */
+    padding-right: 50px; /* space for fixed buttons on the right */
+  }
+  
+  /* Container for delete/rename icons fixed to the right inside the box */
+  .session-actions {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    gap: 5px;
+  }
+  
+  /* Style for the icon buttons */
+  .session-actions button {
+    background: none;
+    border: none;
+    padding: 2px 6px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #555;
+    transition: color 0.3s;
+  }
+  .session-actions button:hover {
+    color: #000;
+  }
